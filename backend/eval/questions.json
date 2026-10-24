@@ -1,0 +1,14 @@
+{
+  "repoUrl": "https://github.com/bradtraversy/proshop-v2",
+  "questions": [
+    { "question": "How does login authentication work and where is the JWT token created?", "expectedFiles": ["backend/controllers/userController.js", "backend/utils/generateToken.js"] },
+    { "question": "Which file defines the order schema?", "expectedFiles": ["backend/models/orderModel.js"] },
+    { "question": "How are item prices, tax and shipping calculated?", "expectedFiles": ["backend/utils/calcPrices.js"] },
+    { "question": "Where is the MongoDB connection established?", "expectedFiles": ["backend/config/db.js"] },
+    { "question": "How is PayPal payment verified on the server?", "expectedFiles": ["backend/utils/paypal.js", "backend/controllers/orderController.js"] },
+    { "question": "How are admin-only routes protected?", "expectedFiles": ["backend/middleware/authMiddleware.js"] },
+    { "question": "How is the shopping cart stored in the frontend?", "expectedFiles": ["frontend/src/slices/cartSlice.js"] },
+    { "question": "Which environment variables must be configured?", "expectedFiles": [".env.example"] },
+    { "question": "How are product images uploaded?", "expectedFiles": ["backend/routes/uploadRoutes.js"] }
+  ]
+}
