@@ -40,7 +40,8 @@ function parseJson(text, depth = 0) {
     }
     return parsed;
   } catch {
-    return { answerable: true, answer: text.trim() };
+    // Not valid JSON (often a cut-off reply when Gemini is busy): flag it so callers do not trust it
+    return { answerable: true, answer: text.trim(), _malformed: true };
   }
 }
 
@@ -76,7 +77,15 @@ export async function generateAnswer(question, chunks, mode) {
         const data = await res.json();
         const text = (data.candidates?.[0]?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || "").join("");
         if (!text) throw new HttpError(502, "Gemini returned an empty answer. Try rephrasing the question.");
-        return parseJson(text);
+        const parsed = parseJson(text);
+        // A broken or empty reply is not an answer: try again, then the next model
+        if (parsed._malformed || typeof parsed.answer !== "string" || !parsed.answer.trim()) {
+          lastError = "malformed answer";
+          console.error(`Gemini returned an unusable answer (${model}), retrying`);
+          await sleep(attempt * 1000);
+          continue;
+        }
+        return { ...parsed, model };
       }
       const detail = await res.json().catch(() => ({}));
       lastError = detail?.error?.message || String(res.status);

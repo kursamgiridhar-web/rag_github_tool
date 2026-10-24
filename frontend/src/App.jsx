@@ -1,109 +1,117 @@
-import { useEffect, useRef, useState } from "react";
-import { checkHealth, importRepo, getRepo, listRepos, askQuestion } from "./api.js";
-import RepoImport from "./components/RepoImport.jsx";
-import QuestionBox from "./components/QuestionBox.jsx";
-import AnswerPanel from "./components/AnswerPanel.jsx";
-import EvidencePanel from "./components/EvidencePanel.jsx";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { AnimatePresence, MotionConfig, motion } from "motion/react";
+import { Zap, ZapOff } from "lucide-react";
+import Background from "./components/Background.jsx";
+import Welcome from "./components/Welcome.jsx";
+import ConnectSequence from "./components/ConnectSequence.jsx";
+import Shell from "./components/Shell.jsx";
+import { checkHealth, importRepo, getRepo, listRepos } from "./api.js";
+import { removeHistory } from "./lib/history.js";
+
+// One shared transition for every screen change: spring in, quick blur-scale out.
+const screenMotion = {
+  initial: { opacity: 0, scale: 0.97, y: 18, filter: "blur(8px)" },
+  animate: { opacity: 1, scale: 1, y: 0, filter: "blur(0px)", transition: { type: "spring", stiffness: 120, damping: 18 } },
+  exit: { opacity: 0, scale: 1.04, filter: "blur(10px)", transition: { duration: 0.26 } },
+};
 
 export default function App() {
+  // screen: "welcome" -> "connecting" (real indexing) -> "workspace" (ready)
+  const [screen, setScreen] = useState("welcome");
   const [health, setHealth] = useState(null); // null = checking, false = offline
-  const [repo, setRepo] = useState(null); // repo object from the backend
-  const [importError, setImportError] = useState("");
+  const [repo, setRepo] = useState(null); // repo object straight from the backend
   const [recent, setRecent] = useState([]);
-  const [asking, setAsking] = useState(false);
-  const [result, setResult] = useState(null);
-  const [activeN, setActiveN] = useState(null);
+  const [failure, setFailure] = useState("");
+  const [reduceMotion, setReduceMotion] = useState(
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
   const pollRef = useRef(null);
 
   useEffect(() => {
-    checkHealth().then(setHealth).catch(() => setHealth(false));
-  }, []);
+    document.documentElement.dataset.motion = reduceMotion ? "reduced" : "full";
+  }, [reduceMotion]);
 
-  useEffect(() => {
-    if (health) listRepos().then(setRecent).catch(() => {});
-  }, [health, repo?.status]);
+  useEffect(() => { checkHealth().then(setHealth).catch(() => setHealth(false)); }, []);
+  useEffect(() => { if (health) listRepos().then(setRecent).catch(() => {}); }, [health, screen]);
 
-  // While indexing, poll the backend every 2 seconds
+  // While indexing, poll the backend every 1.5 seconds.
   useEffect(() => {
     clearInterval(pollRef.current);
-    if (repo?.status !== "indexing" || !repo.repoId) return; // id arrives with the import response
+    if (screen !== "connecting" || !repo?.repoId || repo.status !== "indexing") return;
     pollRef.current = setInterval(async () => {
       try {
-        setRepo(await getRepo(repo.repoId));
+        const next = await getRepo(repo.repoId);
+        setRepo(next);
+        if (next.status === "failed") { setFailure(next.error || "Indexing failed."); setScreen("welcome"); }
       } catch (err) {
-        setImportError(err.message);
+        setFailure(err.message);
+        setScreen("welcome");
       }
-    }, 2000);
+    }, 1500);
     return () => clearInterval(pollRef.current);
-  }, [repo?.repoId, repo?.status]);
+  }, [screen, repo?.repoId, repo?.status]);
 
-  async function handleImport(url, refresh = false) {
-    setImportError("");
-    setResult(null);
-    setRepo({ status: "indexing", stage: "Starting", progress: 0, url });
+  // ConnectSequence calls this after it has played all five steps for a ready repo.
+  const finishConnect = useCallback(() => setScreen((s) => (s === "connecting" ? "workspace" : s)), []);
+
+  // Throws on failure so Welcome can show the message inline.
+  async function startImport(url, refresh = false) {
+    setFailure("");
+    const data = await importRepo(url, refresh);
+    if (data.status === "failed") throw new Error(data.error || "Indexing failed.");
+    setRepo(data);
+    setScreen("connecting");
+  }
+
+  // Reopen a saved investigation: confirm the repo still exists in the backend, then go straight to the workspace.
+  async function openPast(repoId) {
     try {
-      setRepo(await importRepo(url, refresh));
+      const data = await getRepo(repoId);
+      if (data.status !== "ready") throw new Error("That repository is not ready. Re-import it to continue.");
+      setFailure("");
+      setRepo(data);
+      setScreen("workspace");
     } catch (err) {
+      removeHistory(repoId);
+      setFailure(`Could not reopen the saved investigation: ${err.message}`);
       setRepo(null);
-      setImportError(err.message);
+      setScreen("welcome");
     }
   }
 
-  async function handleAsk(question, scope) {
-    setAsking(true);
-    setActiveN(null);
-    try {
-      setResult(await askQuestion(repo.repoId, question, scope));
-    } catch (err) {
-      setResult({ error: err.message });
-    } finally {
-      setAsking(false);
-    }
-  }
-
-  function focusEvidence(n) {
-    setActiveN(n);
-    document.getElementById(`ev-${n}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }
-
-  const ready = repo?.status === "ready";
   const offline = health === false;
   const setupMissing = health && (!health.mongoConfigured || !health.geminiConfigured);
+  const blocked = offline
+    ? "The backend is not running. Start it with: cd backend && npm run dev"
+    : setupMissing
+      ? `Missing configuration: ${[!health.mongoConfigured && "MONGODB_URI", !health.geminiConfigured && "GEMINI_API_KEY"].filter(Boolean).join(", ")}. Check backend/.env and restart.`
+      : "";
 
   return (
-    <div className="app">
-      <header>
-        <div className="brand">
-          <span className="logo">&lt;/&gt;</span>
-          <div>
-            <h1>Repo Investigator</h1>
-            <p>Ask questions about any public GitHub repo. Every answer cites the code it came from.</p>
-          </div>
-        </div>
-        <span className={`pill ${health ? "ok" : offline ? "bad" : ""}`}>
-          {health ? "backend online" : offline ? "backend offline" : "checking..."}
-        </span>
-      </header>
+    <MotionConfig reducedMotion={reduceMotion ? "always" : "never"}>
+      <Background reduceMotion={reduceMotion} boost={screen === "connecting"} />
+      <button
+        type="button"
+        className="motion-toggle"
+        aria-pressed={reduceMotion}
+        onClick={() => setReduceMotion((v) => !v)}
+        title="Turn decorative animation off or on"
+      >
+        {reduceMotion ? <ZapOff size={14} aria-hidden="true" /> : <Zap size={14} aria-hidden="true" />}
+        {reduceMotion ? "Motion: reduced" : "Motion: full"}
+      </button>
 
-      {offline && (
-        <div className="banner bad">The backend is not running. Start it with <code>cd backend &amp;&amp; npm run dev</code>.</div>
-      )}
-      {setupMissing && (
-        <div className="banner warn">
-          Missing configuration: {[!health.mongoConfigured && "MONGODB_URI", !health.geminiConfigured && "GEMINI_API_KEY"].filter(Boolean).join(", ")}.
-          Copy <code>.env.example</code> to <code>backend/.env</code> and restart the backend.
-        </div>
-      )}
-
-      <RepoImport repo={repo} error={importError} recent={recent} onImport={handleImport} disabled={offline || setupMissing} />
-      <QuestionBox onAsk={handleAsk} loading={asking} disabled={!ready} />
-
-      <main className="results">
-        <AnswerPanel result={result} loading={asking} onCite={focusEvidence} />
-        <EvidencePanel sources={result?.sources} activeN={activeN} onSelect={setActiveN} answerable={result?.answerable} />
-      </main>
-
-      <footer>Repository content is treated as untrusted data and is never executed.</footer>
-    </div>
+      <AnimatePresence mode="wait">
+        <motion.div className="screen" key={screen} {...screenMotion}>
+          {screen === "welcome" && (
+            <Welcome onSubmit={startImport} recent={recent} blocked={blocked} initialError={failure} />
+          )}
+          {screen === "connecting" && repo && (
+            <ConnectSequence repo={repo} reduceMotion={reduceMotion} onDone={finishConnect} />
+          )}
+          {screen === "workspace" && repo && <Shell key={repo.repoId} repo={repo} onOpenPast={openPast} reduceMotion={reduceMotion} onReindex={(url) => startImport(url, true).catch((e) => setFailure(e.message))} onNew={() => { setRepo(null); setScreen("welcome"); }} />}
+        </motion.div>
+      </AnimatePresence>
+    </MotionConfig>
   );
 }

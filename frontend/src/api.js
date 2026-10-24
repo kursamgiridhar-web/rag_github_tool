@@ -1,4 +1,5 @@
-// All backend calls live here. Vite proxies /api to the Express server.
+// All backend calls live here. Vite proxies /api to the Express server (port 5000).
+// Every function throws an Error with a readable message, so the UI can just show err.message.
 async function request(path, options) {
   let res;
   try {

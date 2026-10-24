@@ -50,7 +50,7 @@ backend/
     llm/                 Gemini answer generation + prompt
   eval/                  test questions + expected files (Phase 4)
 frontend/
-  src/                   React app (components/, api.js, styles)
+  src/                   React app (components/, lib/, api.js, styles/)
 docs/IMPLEMENTATION_PLAN.md
 README.md  .env.example  .gitignore
 ```
@@ -116,6 +116,7 @@ Work one phase at a time. **Stop after each phase and wait for team verification
 | 3 | Done (first MVP verified end to end) |
 | 4 | Done (hybrid search, filters, trace/bug modes, missing-evidence, eval 9/9) |
 | 5 | Done (UI polish, demo script in docs/DEMO.md) |
+| Frontend | Done (animated connect flow driven by real status, chat with citations, Evidence panel with code viewer, scope filter, saved chats sidebar, reduced-motion toggle; no demo data) |
 
 ## 8. Open decisions for the team
 - Embedding model: default proposal is Gemini embeddings (one API key). Dimension is set in `.env` and must match the Atlas index.

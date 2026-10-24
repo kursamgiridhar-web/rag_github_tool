@@ -40,20 +40,32 @@ router.post("/", wrap(async (req, res) => {
     return res.json({ answerable: false, answer: NOT_FOUND_ANSWER, mode, sources: chunks.map((c, i) => toSource(c, i, false)), meta });
   }
 
-  const result = await generateAnswer(question.trim(), chunks, mode);
-  let answer = String(result.answer || "").trim() || NOT_FOUND_ANSWER;
-
-  // Only keep citations that point at evidence we really retrieved
-  const cited = new Set();
-  answer = answer.replace(/\[(\d+)\]/g, (match, num) => {
-    const n = Number(num);
-    if (n >= 1 && n <= chunks.length) {
-      cited.add(n);
-      return match;
-    }
-    return "";
-  });
-  const answerable = result.answerable !== false;
+  // Quality gate: a real answer must cite at least one retrieved chunk. When Gemini is busy it can
+  // return text with no citations that has nothing to do with the question, so retry once and
+  // otherwise report a clear error instead of showing an ungrounded answer.
+  let answer, answerable, cited, model;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const result = await generateAnswer(question.trim(), chunks, mode);
+    model = result.model;
+    answer = String(result.answer || "").trim() || NOT_FOUND_ANSWER;
+    cited = new Set();
+    // Only keep citations that point at evidence we really retrieved
+    answer = answer.replace(/\[(\d+)\]/g, (match, num) => {
+      const n = Number(num);
+      if (n >= 1 && n <= chunks.length) {
+        cited.add(n);
+        return match;
+      }
+      return "";
+    });
+    answerable = result.answerable !== false;
+    if (!answerable || cited.size > 0) break;
+    console.warn(`Ungrounded answer from ${model} (attempt ${attempt}), ${attempt < 2 ? "retrying" : "giving up"}`);
+  }
+  if (answerable && cited.size === 0) {
+    throw new HttpError(503, "The AI is busy and did not return an answer backed by the repository code. Please ask again in a moment.");
+  }
+  meta.model = model;
   const sources = chunks.map((c, i) => toSource(c, i, cited.has(i + 1)));
   res.json({ answerable, answer, mode, sources, meta });
 }));

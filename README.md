@@ -11,33 +11,47 @@ A RAG application for hackathon **Track 2: RAG Engine**. Paste a public GitHub r
 
 Security: repo text is treated as untrusted data (delimited evidence blocks plus a system rule to ignore instructions inside it), never executed, `.env` files are never indexed.
 
+## Features
+- **Import any public GitHub repo** and watch it become searchable. A five-step progress animation follows the real backend status (fetch, split, embed, save, search index) and never runs ahead of it. Already indexed repos reopen instantly.
+- **Ask questions in a chat.** Answers are Markdown with clickable `[n]` citation chips and badges for mode (trace / bug / general), "Grounded in N sources" and "Not found in repository".
+- **Evidence panel.** Every cited source is a card with file path, line range, category, layer and score. Click one to open a syntax-highlighted code view with the cited lines highlighted, or open the file on GitHub at those lines.
+- **Scope filter** (All files / Code / Config / Tests / Docs) maps to the backend's metadata filter.
+- **Saved chats.** Each repo you investigate appears in the sidebar under **Chats**, named after the repo. Click one to reopen the whole conversation. Chats are stored in your browser only (localStorage); the trash icon deletes one.
+- **Collapsible sidebar**, **Re-index repository** button, and a **Motion: full / reduced** toggle (also follows your OS reduced-motion setting).
+- **Small talk** such as "thanks" or "nice work" gets a friendly local reply and skips retrieval, so it never shows a misleading "not found".
+- Clear messages when the backend is offline, configuration is missing, or GitHub rate limits you.
+
 ## Technologies
-React (Vite) + CSS · Node.js + Express · GitHub REST API · MongoDB Atlas Vector Search + Atlas Search · Gemini API (embeddings + answers)
+React 18 (Vite) + plain CSS (motion, three.js / react-three-fiber, lucide-react, prism-react-renderer) · Node.js + Express · GitHub REST API · MongoDB Atlas Vector Search + Atlas Search · Gemini API (embeddings + answers)
 
 ## Setup
 Requires Node.js 22+ (tested on 24).
 
 1. **Atlas:** create a free M0 cluster, a database user, and allow your IP (Network Access). Copy the `mongodb+srv://...` connection string.
 2. **Gemini:** create a key at https://aistudio.google.com/apikey.
-3. Configure:
+3. **GitHub token (recommended):** without one GitHub allows only 60 API requests per hour, which a couple of imports can use up ("GitHub rate limit reached"). Create a *classic* personal access token with **no scopes** (public data only) at GitHub > Settings > Developer settings > Personal access tokens.
+4. Configure:
    ```bash
    cp .env.example backend/.env
    ```
-   then fill `MONGODB_URI` and `GEMINI_API_KEY` in `backend/.env`. The Atlas vector and text search indexes are created automatically on first start (takes about a minute).
+   then fill `MONGODB_URI`, `GEMINI_API_KEY` and `GITHUB_TOKEN` in `backend/.env`. The Atlas vector and text search indexes are created automatically on first start (takes about a minute). Never commit or share `backend/.env`.
+5. Install dependencies:
+   ```bash
+   npm install                 # root (provides the "run both" command)
+   npm install --prefix backend
+   npm install --prefix frontend
+   ```
 
 ## Run
 ```bash
-# Terminal 1: backend on http://localhost:5000
-cd backend && npm install && npm run dev
+npm run dev      # starts backend (port 5000) and frontend (port 5173) together
 ```
-```bash
-# Terminal 2: frontend on http://localhost:5173
-cd frontend && npm install && npm run dev
-```
-Open http://localhost:5173. Importing a repo of ~70 files takes 1-3 minutes on the Gemini free tier (rate limits); a progress bar shows each stage. Already indexed repos reload instantly.
+Open http://localhost:5173. The Vite dev server proxies `/api` to `localhost:5000`. To run them separately use `cd backend && npm run dev` and `cd frontend && npm run dev`.
+
+Importing a repo of ~70 files takes 1-3 minutes on the Gemini free tier (rate limits). Production build check: `cd frontend && npm run build`.
 
 ## Retrieval evaluation
-`backend/eval/questions.json` holds test questions with the expected source files for the demo repo. After importing `bradtraversy/proshop-v2`:
+`backend/eval/questions.json` holds test questions with the expected source files for the demo repo. After importing `bradtraversy/proshop-v2` (the app must have `backend/.env` filled in):
 ```bash
 cd backend && npm run eval
 ```
@@ -58,7 +72,12 @@ backend/src/
   retrieval/     search.js (vector + keyword + fusion + mode extras)
   llm/           gemini.js (prompt, fallback model)
 backend/eval/    questions.json, run-eval.js
-frontend/src/    App.jsx, api.js, components/ (RepoImport, QuestionBox, AnswerPanel, EvidencePanel, Markdown)
+frontend/src/
+  App.jsx, api.js          screen flow (welcome > connecting > workspace), health check, polling
+  components/              Welcome, ConnectSequence, Shell (sidebar + chat), Thread, Composer,
+                           EvidencePanel, CodeViewer, Markdown, Background (3D/network), FileStack3D
+  lib/                     validateRepoUrl, repoTree, history (saved chats), smallTalk
+  styles/app.css           dark theme, plain CSS
 docs/            IMPLEMENTATION_PLAN.md, DEMO.md
 ```
 
@@ -68,10 +87,11 @@ docs/            IMPLEMENTATION_PLAN.md, DEMO.md
 - `POST /api/ask` `{repoId, question, scope}` returns `{answer, answerable, mode, sources[], meta}`
 
 ## Progress
-All five phases implemented. See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
+All five backend phases and the animated frontend are implemented. See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
 ## Known issues / notes
 - Gemini free tier is rate limited and sometimes returns 503 "high demand": embedding retries automatically; answers fall back to `GEMINI_FALLBACK_MODELS`.
+- Saved chats live in this browser only; clearing site data removes them. They are not shared between devices.
 - Limits: 120 files, 80 KB per file, 500 chunks per repo (see `.env.example`). Public repos only.
 - If Node cannot resolve Atlas DNS (`querySrv ECONNREFUSED`) the backend retries with public DNS automatically.
 - Model names change over time. If Gemini reports a model as unavailable, set `GEMINI_MODEL` in `backend/.env` (list models with the `models` API).
