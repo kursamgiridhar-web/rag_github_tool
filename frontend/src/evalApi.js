@@ -1,6 +1,9 @@
-// Evaluation API calls – all go through the same /api proxy
+// Evaluation API calls – supports VITE_API_URL in production, defaults to /api proxy in dev
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+const API_PREFIX = `${API_BASE}/api`;
+
 const post = (path, body) =>
-  fetch(`/api${path}`, {
+  fetch(`${API_PREFIX}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -11,7 +14,7 @@ const post = (path, body) =>
   });
 
 const get = (path) =>
-  fetch(`/api${path}`).then(async (r) => {
+  fetch(`${API_PREFIX}${path}`).then(async (r) => {
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || `Request failed (${r.status})`);
     return d;

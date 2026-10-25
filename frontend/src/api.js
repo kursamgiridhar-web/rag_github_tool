@@ -1,11 +1,13 @@
-// All backend calls live here. Vite proxies /api to the Express server (port 5000).
-// Every function throws an Error with a readable message, so the UI can just show err.message.
+// All backend calls live here. Supports VITE_API_URL in production, defaults to /api proxy in dev.
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+const API_PREFIX = `${API_BASE}/api`;
+
 async function request(path, options) {
   let res;
   try {
-    res = await fetch(`/api${path}`, options);
+    res = await fetch(`${API_PREFIX}${path}`, options);
   } catch {
-    throw new Error("Cannot reach the backend. Is it running on port 5000?");
+    throw new Error("Cannot reach the backend. Is it running?");
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
