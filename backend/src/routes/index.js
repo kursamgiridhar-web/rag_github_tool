@@ -2,6 +2,7 @@ import { Router } from "express";
 import { config } from "../config.js";
 import reposRoutes from "./repos.js";
 import askRoutes from "./ask.js";
+import evalRoutes from "./eval.js";
 
 const router = Router();
 
@@ -15,5 +16,6 @@ router.get("/health", (req, res) => {
 
 router.use("/repos", reposRoutes);
 router.use("/ask", askRoutes);
+router.use("/eval", evalRoutes);
 
 export default router;

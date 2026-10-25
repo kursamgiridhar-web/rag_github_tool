@@ -1,14 +1,145 @@
 {
   "repoUrl": "https://github.com/bradtraversy/proshop-v2",
   "questions": [
-    { "question": "How does login authentication work and where is the JWT token created?", "expectedFiles": ["backend/controllers/userController.js", "backend/utils/generateToken.js"] },
-    { "question": "Which file defines the order schema?", "expectedFiles": ["backend/models/orderModel.js"] },
-    { "question": "How are item prices, tax and shipping calculated?", "expectedFiles": ["backend/utils/calcPrices.js"] },
-    { "question": "Where is the MongoDB connection established?", "expectedFiles": ["backend/config/db.js"] },
-    { "question": "How is PayPal payment verified on the server?", "expectedFiles": ["backend/utils/paypal.js", "backend/controllers/orderController.js"] },
-    { "question": "How are admin-only routes protected?", "expectedFiles": ["backend/middleware/authMiddleware.js"] },
-    { "question": "How is the shopping cart stored in the frontend?", "expectedFiles": ["frontend/src/slices/cartSlice.js"] },
-    { "question": "Which environment variables must be configured?", "expectedFiles": [".env.example"] },
-    { "question": "How are product images uploaded?", "expectedFiles": ["backend/routes/uploadRoutes.js"] }
+    {
+      "id": "q01",
+      "category": "single-file",
+      "question": "Which file defines the order schema and what fields does it contain?",
+      "expectedFiles": ["backend/models/orderModel.js"],
+      "referenceAnswer": "The order schema is defined in backend/models/orderModel.js. It contains fields for orderItems (array with name, qty, image, price, product), shippingAddress (address, city, postalCode, country), paymentMethod (string), paymentResult (id, status, updateTime, emailAddress), taxPrice, shippingPrice, totalPrice, isPaid, paidAt, isDelivered, deliveredAt, and a user reference."
+    },
+    {
+      "id": "q02",
+      "category": "single-file",
+      "question": "Where is the MongoDB connection established and which environment variable controls it?",
+      "expectedFiles": ["backend/config/db.js"],
+      "referenceAnswer": "The MongoDB connection is established in backend/config/db.js using Mongoose. It reads the MONGO_URI environment variable via process.env.MONGO_URI and calls mongoose.connect() with that URI. Connection errors are caught and trigger process.exit(1)."
+    },
+    {
+      "id": "q03",
+      "category": "single-file",
+      "question": "How are admin-only routes protected in this codebase?",
+      "expectedFiles": ["backend/middleware/authMiddleware.js"],
+      "referenceAnswer": "Admin-only routes are protected by the admin middleware in backend/middleware/authMiddleware.js. The protect middleware first verifies the JWT token and attaches req.user. The admin middleware then checks req.user.isAdmin and returns a 401 error if the user is not an administrator."
+    },
+    {
+      "id": "q04",
+      "category": "single-file",
+      "question": "How is the shopping cart state stored and managed in the frontend?",
+      "expectedFiles": ["frontend/src/slices/cartSlice.js"],
+      "referenceAnswer": "The cart state is managed using Redux Toolkit in frontend/src/slices/cartSlice.js. It stores cart items, shipping address, and payment method in a Redux slice. The cart data is persisted to localStorage via localStorageMiddleware or directly in the reducers. Reducers handle addToCart, removeFromCart, saveShippingAddress, and savePaymentMethod actions, and also calculate itemsPrice, taxPrice, shippingPrice, and totalPrice."
+    },
+    {
+      "id": "q05",
+      "category": "cross-file",
+      "question": "How does login authentication work end-to-end, from receiving the request to sending back a JWT token?",
+      "expectedFiles": ["backend/controllers/userController.js", "backend/utils/generateToken.js"],
+      "referenceAnswer": "Login is handled by the authUser function in backend/controllers/userController.js. It receives email and password, queries the User model, and calls matchPassword to compare the submitted password against the hashed password stored in MongoDB. If authentication succeeds, it calls generateToken from backend/utils/generateToken.js, which signs a JWT with the user _id using jwt.sign() and the JWT_SECRET environment variable, then sets it as an HTTP-only cookie. The response includes user profile fields."
+    },
+    {
+      "id": "q06",
+      "category": "cross-file",
+      "question": "How is PayPal payment verified on the server side after the client completes payment?",
+      "expectedFiles": ["backend/utils/paypal.js", "backend/controllers/orderController.js"],
+      "referenceAnswer": "After client-side payment, the frontend calls the updateOrderToPaid endpoint handled in backend/controllers/orderController.js. This calls getOrderById to find the order, then uses getPayPalAccessToken and verifyPayPalPayment from backend/utils/paypal.js to validate the payment with PayPal's Orders v2 API. If verification succeeds, the order is marked isPaid with a paidAt timestamp and a paymentResult object containing id, status, updateTime, and emailAddress from the PayPal response."
+    },
+    {
+      "id": "q07",
+      "category": "cross-file",
+      "question": "How are item prices, shipping costs, and tax calculated, and which files are involved?",
+      "expectedFiles": ["backend/utils/calcPrices.js"],
+      "referenceAnswer": "Price calculations are centralised in backend/utils/calcPrices.js. The addDecimals utility rounds to two decimal places. calcPrices receives an array of order items, calculates itemsPrice as the sum of price * qty for each item, sets shippingPrice to 100 if the total exceeds 100 else 10, taxPrice as 15% of itemsPrice, and totalPrice as the sum of all three. These values are stored on the Order document."
+    },
+    {
+      "id": "q08",
+      "category": "frontend-backend-db",
+      "question": "Trace the complete request flow when a user adds a product to their cart, from clicking the button to state being saved.",
+      "expectedFiles": ["frontend/src/slices/cartSlice.js", "frontend/src/screens/ProductScreen.jsx"],
+      "referenceAnswer": "When the user clicks Add to Cart on ProductScreen (frontend/src/screens/ProductScreen.jsx), it dispatches the addToCart action from cartSlice (frontend/src/slices/cartSlice.js) with the product data and quantity. The Redux reducer checks whether the item already exists in the cart (by matching product _id), updates the qty if it does, otherwise appends it. It then recalculates prices and serialises the updated cart to localStorage. No backend call is made for cart operations; the cart lives entirely on the client side."
+    },
+    {
+      "id": "q09",
+      "category": "architecture",
+      "question": "What is the overall architecture of this project: layers, main technologies, and how the frontend talks to the backend?",
+      "expectedFiles": ["backend/server.js", "frontend/src/store.js"],
+      "referenceAnswer": "This is a MERN stack application. The backend is an Express.js server (backend/server.js) connected to MongoDB Atlas via Mongoose. The frontend is a React application using Redux Toolkit for state management (frontend/src/store.js) and React Router for routing. The frontend communicates with the backend through a REST API. Authentication uses JWT tokens stored as HTTP-only cookies. The backend serves static frontend files in production."
+    },
+    {
+      "id": "q10",
+      "category": "architecture",
+      "question": "How are environment variables structured and which ones are required to run this application?",
+      "expectedFiles": [".env.example"],
+      "referenceAnswer": "The required environment variables are listed in .env.example. They include NODE_ENV (development or production), PORT (backend server port), MONGO_URI (MongoDB connection string), JWT_SECRET (secret for signing JWTs), PAYPAL_CLIENT_ID, PAYPAL_APP_SECRET, PAYPAL_API_URL (PayPal sandbox URL), PAGINATION_LIMIT, and optionally the upload path. A sample .env file must be created in the backend directory from this template."
+    },
+    {
+      "id": "q11",
+      "category": "single-file",
+      "question": "How are product images uploaded to the server and where is the upload route defined?",
+      "expectedFiles": ["backend/routes/uploadRoutes.js"],
+      "referenceAnswer": "Product image uploads are handled in backend/routes/uploadRoutes.js. It uses the multer middleware configured with diskStorage to save files to the /uploads directory. A fileFilter validates that only image MIME types are accepted. The route returns the relative URL of the uploaded file, which is then stored in the product document."
+    },
+    {
+      "id": "q12",
+      "category": "ambiguous",
+      "question": "What middleware does this project use?",
+      "expectedFiles": ["backend/middleware/authMiddleware.js", "backend/middleware/errorMiddleware.js"],
+      "referenceAnswer": "This project has two custom middleware files. backend/middleware/authMiddleware.js provides protect (JWT verification) and admin (isAdmin check) middleware. backend/middleware/errorMiddleware.js provides notFound (404 handler) and errorHandler (centralized error response) middleware. The server also uses express built-in middleware for JSON parsing and static file serving, plus cookie-parser for reading JWT cookies."
+    },
+    {
+      "id": "q13",
+      "category": "missing-file",
+      "question": "Where is the WebSocket real-time chat feature implemented?",
+      "expectedFiles": [],
+      "referenceAnswer": "This repository does not implement a WebSocket or real-time chat feature. No WebSocket library such as socket.io or ws is present in the dependencies or the codebase. This is an e-commerce application focused on product browsing, cart management, and order placement."
+    },
+    {
+      "id": "q14",
+      "category": "unanswerable",
+      "question": "What is the exact monthly hosting cost of this application in production?",
+      "expectedFiles": [],
+      "referenceAnswer": "The repository does not contain information about hosting costs. This is a source code repository and does not include billing, infrastructure pricing, or deployment cost information."
+    },
+    {
+      "id": "q15",
+      "category": "multi-file",
+      "question": "How are orders created, what data is validated, and how is the total price calculated before saving to the database?",
+      "expectedFiles": ["backend/controllers/orderController.js", "backend/utils/calcPrices.js", "backend/models/orderModel.js"],
+      "referenceAnswer": "Order creation is handled by addOrderItems in backend/controllers/orderController.js. It validates that the orderItems array is not empty and throws a 400 error otherwise. It maps the submitted items to product _ids and fetches prices from the database, preventing price manipulation. Prices are then passed to calcPrices (backend/utils/calcPrices.js) which computes itemsPrice, shippingPrice (free over $100), taxPrice (15%), and totalPrice. The assembled order document is saved using the Order model defined in backend/models/orderModel.js."
+    },
+    {
+      "id": "q16",
+      "category": "edge-case",
+      "question": "How does the application handle errors when a requested product is not found?",
+      "expectedFiles": ["backend/middleware/errorMiddleware.js", "backend/controllers/productController.js"],
+      "referenceAnswer": "When a product is not found, the controller in backend/controllers/productController.js throws a custom error (or returns a 404). This is caught by the global errorHandler in backend/middleware/errorMiddleware.js, which sets the response status to the error status or 500, and returns a JSON body with an error message. In development mode, the stack trace is also included in the response."
+    },
+    {
+      "id": "q17",
+      "category": "cross-file",
+      "question": "How does the admin product management work — where can an admin create, update, or delete products?",
+      "expectedFiles": ["backend/controllers/productController.js", "backend/routes/productRoutes.js"],
+      "referenceAnswer": "Admin product management is defined in backend/routes/productRoutes.js. The routes for createProduct (POST /), updateProduct (PUT /:id), and deleteProduct (DELETE /:id) are protected by both the protect and admin middleware. The controller functions in backend/controllers/productController.js handle the actual database operations using the Product model. createProduct creates a sample product with placeholder values, updateProduct accepts fields from the request body and saves them, and deleteProduct removes the document by ID."
+    },
+    {
+      "id": "q18",
+      "category": "incorrect-assumption",
+      "question": "How does this application use GraphQL for its API?",
+      "expectedFiles": [],
+      "referenceAnswer": "This application does not use GraphQL. It uses a standard REST API built with Express.js. The backend exposes RESTful endpoints under /api/products, /api/users, /api/orders, and /api/upload. There is no GraphQL schema, resolver, or related dependency in this repository."
+    },
+    {
+      "id": "q19",
+      "category": "multi-file",
+      "question": "How does pagination work for the products listing page — from the frontend request to the database query?",
+      "expectedFiles": ["backend/controllers/productController.js", "frontend/src/screens/HomeScreen.jsx"],
+      "referenceAnswer": "The frontend HomeScreen (frontend/src/screens/HomeScreen.jsx) reads the pageNumber from the URL params and includes it in the API request to /api/products. The getProducts controller in backend/controllers/productController.js reads the pageNumber query param, calculates a page size from the PAGINATION_LIMIT environment variable, applies a keyword filter for search, and uses Mongoose .limit() and .skip() to return only the relevant slice of products. It also returns pages (total page count) so the frontend can render the Paginate component."
+    },
+    {
+      "id": "q20",
+      "category": "incomplete",
+      "question": "Is there any testing setup in this repository?",
+      "expectedFiles": [],
+      "referenceAnswer": "This repository does not appear to contain a dedicated test suite. There are no test files, no test framework configuration (such as Jest or Mocha), and no test script in package.json. The absence of tests is a known limitation of this demo codebase."
+    }
   ]
 }

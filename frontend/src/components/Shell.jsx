@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Plus, MessagesSquare, FolderSearch, MessageSquare, Trash2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Plus, MessagesSquare, FolderSearch, MessageSquare, Trash2, PanelLeftClose, PanelLeftOpen, FlaskConical } from "lucide-react";
+import EvalDashboard from "./EvalDashboard.jsx";
 import Thread from "./Thread.jsx";
 import Composer from "./Composer.jsx";
 import EvidencePanel from "./EvidencePanel.jsx";
@@ -16,6 +17,7 @@ export default function Shell({ repo, onNew, onReindex, onOpenPast, reduceMotion
   const [activeId, setActiveId] = useState(null);
   const [activeN, setActiveN] = useState(null);
   const [draft, setDraft] = useState("");
+  const [view, setView] = useState("investigation"); // "investigation" | "eval"
   const [narrowTab, setNarrowTab] = useState("thread");
   const [collapsed, setCollapsed] = useState(false);
   const busy = turns.some((t) => t.status === "loading");
@@ -52,6 +54,7 @@ export default function Shell({ repo, onNew, onReindex, onOpenPast, reduceMotion
   function handleCite(turnId, n) {
     setActiveId(turnId);
     setActiveN(n);
+    setView("investigation");
     setNarrowTab("evidence");
     setTimeout(() => document.getElementById(`ev-${n}`)?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" }), 60);
   }
@@ -76,6 +79,7 @@ export default function Shell({ repo, onNew, onReindex, onOpenPast, reduceMotion
   ];
   // Clicking a chat opens the whole conversation for that repo.
   function openChat(g) {
+    setView("investigation");
     if (g.current) { setActiveId(null); setActiveN(null); setNarrowTab("thread"); }
     else onOpenPast(g.repoId);
   }
@@ -99,6 +103,30 @@ export default function Shell({ repo, onNew, onReindex, onOpenPast, reduceMotion
           <p className="repo-name">{label}</p>
           <span className="badge ok">{repo.fileCount} files · {repo.chunkCount} chunks</span>
           <button type="button" className="link" onClick={() => onReindex(repo.url)} title="Fetch the latest code and rebuild the index">Re-index repository</button>
+        </div>
+
+        <div className="side-group">
+          <h2>Mode</h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <button
+              type="button"
+              className={`hist-head ${view === "investigation" ? "current active" : ""}`}
+              onClick={() => { setView("investigation"); setNarrowTab("thread"); }}
+            >
+              <MessagesSquare size={14} className="hist-icon" aria-hidden="true" />
+              <span className="hist-name">Investigation</span>
+            </button>
+            <button
+              type="button"
+              id="sidebar-eval-btn"
+              className={`hist-head ${view === "eval" ? "current active" : ""}`}
+              onClick={() => setView("eval")}
+            >
+              <FlaskConical size={14} className="hist-icon" aria-hidden="true" style={{ color: "var(--indigo)" }} />
+              <span className="hist-name">Evaluation</span>
+              <span className="badge ok" style={{ marginLeft: "auto", fontSize: "0.68rem" }}>20 Qs</span>
+            </button>
+          </div>
         </div>
 
         <nav className="side-group side-history" aria-label="Chats">
@@ -127,31 +155,43 @@ export default function Shell({ repo, onNew, onReindex, onOpenPast, reduceMotion
 
       <div className="ws-main">
         <div className="ws-tabs" role="tablist" aria-label="View">
-          <button role="tab" type="button" className={`ws-tab ${narrowTab === "thread" ? "active" : ""}`} aria-selected={narrowTab === "thread"} onClick={() => setNarrowTab("thread")}>
+          <button role="tab" type="button" className={`ws-tab ${view === "investigation" && narrowTab === "thread" ? "active" : ""}`} aria-selected={view === "investigation" && narrowTab === "thread"} onClick={() => { setView("investigation"); setNarrowTab("thread"); }}>
             <MessagesSquare size={14} aria-hidden="true" /> Investigation
           </button>
-          <button role="tab" type="button" className={`ws-tab ${narrowTab === "evidence" ? "active" : ""}`} aria-selected={narrowTab === "evidence"} onClick={() => setNarrowTab("evidence")}>
+          <button role="tab" type="button" className={`ws-tab ${view === "investigation" && narrowTab === "evidence" ? "active" : ""}`} aria-selected={view === "investigation" && narrowTab === "evidence"} onClick={() => { setView("investigation"); setNarrowTab("evidence"); }}>
             <FolderSearch size={14} aria-hidden="true" /> Evidence
+          </button>
+          <button role="tab" type="button" id="eval-tab" className={`ws-tab eval-tab ${view === "eval" ? "active" : ""}`} aria-selected={view === "eval"} onClick={() => setView("eval")}>
+            <FlaskConical size={14} aria-hidden="true" /> Evaluation
           </button>
         </div>
 
-        <div className={`ws-thread ${narrowTab !== "thread" ? "ws-panel-hidden" : ""}`}>
-          <header className="ws-panel-head">
-            <div><h1 className="ws-panel-title">Investigation</h1><p className="ws-panel-sub">{label}</p></div>
-          </header>
-          <Thread turns={turns} onCite={handleCite} onRetry={handleRetry} onPick={setDraft} reduceMotion={reduceMotion} />
-          <Composer onSubmit={handleAsk} busy={busy} repoLabel={label} draft={draft} onDraftUsed={clearDraft} />
-        </div>
-
-        <div className={`ws-explorer ${narrowTab !== "evidence" ? "ws-panel-hidden" : ""}`}>
-          <header className="ws-panel-head">
-            <div><h1 className="ws-panel-title">Evidence</h1><p className="ws-panel-sub">Click a citation number to jump to its source</p></div>
-          </header>
-          <div className="evidence-scroll">
-            <EvidencePanel turn={activeTurn} activeN={activeN} onSelect={setActiveN} reduceMotion={reduceMotion} />
+        {view === "eval" ? (
+          <div className="ws-eval-full">
+            <EvalDashboard currentRepoUrl={repo.url} onBack={() => setView("investigation")} />
           </div>
-        </div>
+        ) : (
+          <>
+            <div className={`ws-thread ${narrowTab !== "thread" ? "ws-panel-hidden" : ""}`}>
+              <header className="ws-panel-head">
+                <div><h1 className="ws-panel-title">Investigation</h1><p className="ws-panel-sub">{label}</p></div>
+              </header>
+              <Thread turns={turns} onCite={handleCite} onRetry={handleRetry} onPick={setDraft} reduceMotion={reduceMotion} />
+              <Composer onSubmit={handleAsk} busy={busy} repoLabel={label} draft={draft} onDraftUsed={clearDraft} />
+            </div>
+
+            <div className={`ws-explorer ${narrowTab !== "evidence" ? "ws-panel-hidden" : ""}`}>
+              <header className="ws-panel-head">
+                <div><h1 className="ws-panel-title">Evidence</h1><p className="ws-panel-sub">Click a citation number to jump to its source</p></div>
+              </header>
+              <div className="evidence-scroll">
+                <EvidencePanel turn={activeTurn} activeN={activeN} onSelect={setActiveN} reduceMotion={reduceMotion} />
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
 }
+

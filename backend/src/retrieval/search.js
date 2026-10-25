@@ -3,8 +3,8 @@ import { embedQuery } from "../embeddings/gemini.js";
 import { config } from "../config.js";
 
 const FIELDS = { embedding: 0 }; // never send big vectors around
-const MAX_PER_FILE = 3;
-const FINAL_LIMIT = 10;
+const MAX_PER_FILE = 2; // ensures diverse file coverage across cross-file questions
+const FINAL_LIMIT = 15; // increased from 10 to give room for full cross-layer evidence
 
 const STOPWORDS = new Set(
   "the and for with this that from how does what where when why which who can are was were has have into about would could should there their them then than its not but you your all any use used using work works code file files repo repository app does do is it in on of to a an be by as at or if we".split(" ")
@@ -38,7 +38,7 @@ export async function vectorSearch(repoId, queryVector, { limit = 20, category, 
 function keywordsOf(question) {
   const identifiers = question.match(/[A-Za-z_][A-Za-z0-9_.-]*[A-Z_.][A-Za-z0-9_.-]*/g) || []; // camelCase, snake_case, file.names
   const words = (question.toLowerCase().match(/[a-z0-9_]{3,}/g) || []).filter((w) => !STOPWORDS.has(w));
-  return [...new Set([...identifiers, ...words])].slice(0, 12);
+  return [...new Set([...identifiers, ...words])].slice(0, 16);
 }
 
 export async function textSearch(repoId, question, { limit = 20, category } = {}) {
